@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [isCapturingAudio, setIsCapturingAudio] = useState(false);
-
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const recordedChunks = useRef<Blob[]>([]);
 
   useEffect(() => {
     const getMicrophone = async () => {
@@ -27,13 +29,51 @@ export default function Home() {
     };
 
     getMicrophone();
+  }, []);
 
-    return () => {
-      if (audioStream) {
-        audioStream.getTracks().forEach((track) => track.stop());
+  function playRecording() {
+    if (recordedChunks.current.length > 0) {
+      const blob = new Blob(recordedChunks.current, { type: "audio/webm" });
+      const audioURL = URL.createObjectURL(blob);
+      const audio = new Audio(audioURL);
+      audio.play();
+
+      audio.onended = () => URL.revokeObjectURL(audioURL);
+    }
+  }
+
+  function startRecording() {
+    if (!audioStream) {
+      console.error("No audio stream available.");
+      return;
+    }
+
+    recordedChunks.current = [];
+
+    mediaRecorder.current = new MediaRecorder(audioStream);
+
+    mediaRecorder.current.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        recordedChunks.current = [...recordedChunks.current, event.data];
+        playRecording();
       }
     };
-  }, []);
+
+    mediaRecorder.current.onstart = () => {
+      setIsRecording(true);
+    };
+
+    mediaRecorder.current.onstop = () => {
+      setIsRecording(false);
+    };
+
+    mediaRecorder.current.start();
+    setTimeout(() => {
+      if (mediaRecorder.current) {
+        mediaRecorder.current.stop();
+      }
+    }, 3000);
+  }
 
   if (error) {
     return (
@@ -56,18 +96,9 @@ export default function Home() {
     );
   }
 
-  function captureAudio() {
-    if (!isCapturingAudio) {
-      setIsCapturingAudio(true);
-      setTimeout(() => {
-        setIsCapturingAudio(false);
-      }, 3000);
-    }
-  }
-
   return (
     <div className="container h-screen flex justify-center items-center">
-      {isCapturingAudio ? (
+      {isRecording ? (
         <div className="flex flex-col items-center gap-1">
           <LoaderCircle className="animate-spin" />
           <span>Analisando ambiente</span>
@@ -75,8 +106,8 @@ export default function Home() {
       ) : (
         <Button
           className="h-24 w-24 rounded-full bg-transparent border-2 border-primary text-primary text-lg font-semibold uppercase hover:bg-primary/80 hover:text-white hover:cursor-pointer hover:scale-110 duration-300"
-          onClick={captureAudio}
-          disabled={isCapturingAudio}
+          onClick={startRecording}
+          disabled={isRecording}
         >
           Ouvir
         </Button>
