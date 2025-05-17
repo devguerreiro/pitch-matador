@@ -6,10 +6,16 @@ import { LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+interface TranscriptionResponse {
+  transcription?: string;
+  error?: string;
+}
+
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [transcription, setTranscription] = useState<string>("");
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
@@ -31,17 +37,6 @@ export default function Home() {
     getMicrophone();
   }, []);
 
-  function playRecording() {
-    if (recordedChunks.current.length > 0) {
-      const blob = new Blob(recordedChunks.current, { type: "audio/webm" });
-      const audioURL = URL.createObjectURL(blob);
-      const audio = new Audio(audioURL);
-      audio.play();
-
-      audio.onended = () => URL.revokeObjectURL(audioURL);
-    }
-  }
-
   function startRecording() {
     if (!audioStream) {
       console.error("No audio stream available.");
@@ -52,10 +47,38 @@ export default function Home() {
 
     mediaRecorder.current = new MediaRecorder(audioStream);
 
-    mediaRecorder.current.ondataavailable = (event) => {
+    mediaRecorder.current.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         recordedChunks.current = [...recordedChunks.current, event.data];
-        playRecording();
+        const audioBlob = new Blob(recordedChunks.current, {
+          type: "audio/webm;codecs=opus",
+        });
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
+        try {
+          const response = await fetch("/api/speech-to-text", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ audioData: base64Audio }),
+          });
+
+          if (response.ok) {
+            const data: TranscriptionResponse = await response.json();
+            setTranscription(
+              data.transcription || "Nenhuma transcrição recebida."
+            );
+          } else {
+            console.error("Erro ao enviar áudio para transcrição");
+            const errorData: TranscriptionResponse = await response.json();
+            setTranscription(errorData.error || "Erro na transcrição.");
+          }
+        } catch (error) {
+          console.error("Erro ao comunicar com a API:", error);
+          setTranscription("Erro ao comunicar com o servidor.");
+        }
       }
     };
 
@@ -104,13 +127,16 @@ export default function Home() {
           <span>Analisando ambiente</span>
         </div>
       ) : (
-        <Button
-          className="h-24 w-24 rounded-full bg-transparent border-2 border-primary text-primary text-lg font-semibold uppercase hover:bg-primary/80 hover:text-white hover:cursor-pointer hover:scale-110 duration-300"
-          onClick={startRecording}
-          disabled={isRecording}
-        >
-          Ouvir
-        </Button>
+        <div className="flex flex-col gap-2 items-center text-center">
+          <Button
+            className="h-24 w-24 rounded-full bg-transparent border-2 border-primary text-primary text-lg font-semibold uppercase hover:bg-primary/80 hover:text-white hover:cursor-pointer hover:scale-110 duration-300"
+            onClick={startRecording}
+            disabled={isRecording}
+          >
+            Ouvir
+          </Button>
+          {transcription}
+        </div>
       )}
     </div>
   );
