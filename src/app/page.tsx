@@ -11,11 +11,17 @@ interface TranscriptionResponse {
   error?: string;
 }
 
+interface GeminiResponse {
+  response?: string;
+  error?: string;
+}
+
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [transcription, setTranscription] = useState<string>("");
+  const [response, setResponse] = useState<string>("");
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
@@ -70,13 +76,34 @@ export default function Home() {
             setTranscription(
               data.transcription || "Nenhuma transcrição recebida."
             );
+
+            try {
+              const res = await fetch("/api/gemini", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ prompt: data.transcription }),
+              });
+
+              if (res.ok) {
+                const data: GeminiResponse = await res.json();
+                setResponse(data.response || "");
+              } else {
+                const errorData: GeminiResponse = await res.json();
+                setResponse(errorData.error || "Erro ao obter resposta.");
+              }
+            } catch (err) {
+              console.error("Erro ao enviar prompt:", err);
+              setResponse("Falha ao comunicar com o servidor.");
+            }
           } else {
             console.error("Erro ao enviar áudio para transcrição");
             const errorData: TranscriptionResponse = await response.json();
             setTranscription(errorData.error || "Erro na transcrição.");
           }
-        } catch (error) {
-          console.error("Erro ao comunicar com a API:", error);
+        } catch (err) {
+          console.error("Erro ao comunicar com a API:", err);
           setTranscription("Erro ao comunicar com o servidor.");
         }
       }
@@ -135,7 +162,12 @@ export default function Home() {
           >
             Ouvir
           </Button>
-          {transcription}
+          <span>
+            Transcrição: <strong>{transcription}</strong>
+          </span>
+          <span>
+            Feedback: <strong>{response}</strong>
+          </span>
         </div>
       )}
     </div>
