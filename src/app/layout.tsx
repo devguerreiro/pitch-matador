@@ -13,9 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Toilet Mood",
-  description:
-    "Um app que simula detectar o “clima emocional” do banheiro com base em sons capturados, retornando uma classificação engraçada e uma frase correspondente. Tudo com uma pegada cômica, leve e facilmente viralizável.",
+  title: "Pitch Matador",
+  description: "O app que avalia sua ideia de startup… e sempre dá nota baixa",
 };
 
 export default function RootLayout({
