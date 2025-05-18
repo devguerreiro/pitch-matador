@@ -36,24 +36,15 @@ npm install
 
 ## 🔐 Configuração
 
-Crie um arquivo `.env.local` na raiz do projeto com base no exemplo `.env.example`:
+Crie um arquivo `.env.local` na raiz do projeto com base no exemplo:
 
 ```env
 # GEMINI
 GOOGLE_AI_API_KEY=""
 
 # GOOGLE CLOUD
-GOOGLE_CLOUD_TYPE=""
-GOOGLE_CLOUD_PROJECT_ID=""
-GOOGLE_CLOUD_PRIVATE_KEY_ID=""
-GOOGLE_CLOUD_PRIVATE_KEY=""
-GOOGLE_CLOUD_CLIENT_EMAIL=""
-GOOGLE_CLOUD_CLIENT_ID=""
-GOOGLE_CLOUD_AUTH_URI=""
-GOOGLE_CLOUD_TOKEN_URI=""
-GOOGLE_CLOUD_AUTH_PROVIDER_X509_CERT_URL=""
-GOOGLE_CLOUD_CLIENT_X509_CERT_URL=""
-GOOGLE_CLOUD_UNIVERSE_DOMAIN=""
+GOOGLE_CLOUD_CREDENTIALS_JSON='
+'
 ```
 
 ---
