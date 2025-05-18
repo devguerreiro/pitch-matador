@@ -16,12 +16,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await model.generateContent(
-      `Avalie essa ideia de startup "${prompt}" retornando uma nota de 1 à 4 e uma frase sarcástica no formato 
-      Nota: 
-      Frase Sarcástica:
-      `
-    );
+    const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response?.candidates?.[0]?.content?.parts?.[0]?.text;
 

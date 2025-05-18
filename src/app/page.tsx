@@ -18,10 +18,14 @@ interface GeminiResponse {
 
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isDemotivating, setIsDemotivating] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+
   const [transcription, setTranscription] = useState<string>("");
-  const [response, setResponse] = useState<string>("");
+  const [demotivation, setDemotivation] = useState<string>("");
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
@@ -43,6 +47,71 @@ export default function Home() {
     getMicrophone();
   }, []);
 
+  async function transcribeAudio(audio: Blob) {
+    setIsTranscribing(true);
+
+    const arrayBuffer = await audio.arrayBuffer();
+    const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
+    try {
+      const response = await fetch("/api/speech-to-text", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ audioData: base64Audio }),
+      });
+
+      if (response.ok) {
+        const data: TranscriptionResponse = await response.json();
+        setTranscription(data.transcription || "Nenhuma transcrição recebida.");
+
+        return data.transcription;
+      } else {
+        console.error("Erro ao enviar áudio para transcrição");
+        const errorData: TranscriptionResponse = await response.json();
+        setTranscription(errorData.error || "Erro na transcrição.");
+      }
+    } catch (err) {
+      console.error("Erro ao comunicar com a API:", err);
+      setTranscription("Erro ao comunicar com o servidor.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  }
+
+  async function demotivateTranscription(transcription: string) {
+    setIsDemotivating(true);
+
+    try {
+      const prompt = `Avalie essa ideia de startup "${transcription}" retornando uma nota de 1 à 4 e uma frase sarcástica no formato 
+      Nota: 
+      Frase Sarcástica:
+      `;
+
+      const res = await fetch("/api/gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (res.ok) {
+        const data: GeminiResponse = await res.json();
+        setDemotivation(data.response || "");
+      } else {
+        const errorData: GeminiResponse = await res.json();
+        setDemotivation(errorData.error || "Erro ao obter resposta.");
+      }
+    } catch (err) {
+      console.error("Erro ao enviar prompt:", err);
+      setDemotivation("Falha ao comunicar com o servidor.");
+    } finally {
+      setIsDemotivating(false);
+    }
+  }
+
   function startRecording() {
     if (!audioStream) {
       console.error("No audio stream available.");
@@ -55,57 +124,8 @@ export default function Home() {
 
     mediaRecorder.current.ondataavailable = async (event) => {
       if (event.data.size > 0) {
-        recordedChunks.current = [...recordedChunks.current, event.data];
-        const audioBlob = new Blob(recordedChunks.current, {
-          type: "audio/webm;codecs=opus",
-        });
-        const arrayBuffer = await audioBlob.arrayBuffer();
-        const base64Audio = Buffer.from(arrayBuffer).toString("base64");
-
-        try {
-          const response = await fetch("/api/speech-to-text", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ audioData: base64Audio }),
-          });
-
-          if (response.ok) {
-            const data: TranscriptionResponse = await response.json();
-            setTranscription(
-              data.transcription || "Nenhuma transcrição recebida."
-            );
-
-            try {
-              const res = await fetch("/api/gemini", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ prompt: data.transcription }),
-              });
-
-              if (res.ok) {
-                const data: GeminiResponse = await res.json();
-                setResponse(data.response || "");
-              } else {
-                const errorData: GeminiResponse = await res.json();
-                setResponse(errorData.error || "Erro ao obter resposta.");
-              }
-            } catch (err) {
-              console.error("Erro ao enviar prompt:", err);
-              setResponse("Falha ao comunicar com o servidor.");
-            }
-          } else {
-            console.error("Erro ao enviar áudio para transcrição");
-            const errorData: TranscriptionResponse = await response.json();
-            setTranscription(errorData.error || "Erro na transcrição.");
-          }
-        } catch (err) {
-          console.error("Erro ao comunicar com a API:", err);
-          setTranscription("Erro ao comunicar com o servidor.");
-        }
+        const transcribedAudio = await transcribeAudio(event.data);
+        demotivateTranscription(transcribedAudio ?? "");
       }
     };
 
@@ -122,7 +142,7 @@ export default function Home() {
       if (mediaRecorder.current) {
         mediaRecorder.current.stop();
       }
-    }, 3000);
+    }, 5000);
   }
 
   if (error) {
@@ -151,23 +171,29 @@ export default function Home() {
       {isRecording ? (
         <div className="flex flex-col items-center gap-1">
           <LoaderCircle className="animate-spin" />
-          <span>Analisando ambiente</span>
+          <span>Ouvindo essa ideia de merda...</span>
         </div>
       ) : (
         <div className="flex flex-col gap-2 items-center text-center">
-          <Button
-            className="h-24 w-24 rounded-full bg-transparent border-2 border-primary text-primary text-lg font-semibold uppercase hover:bg-primary/80 hover:text-white hover:cursor-pointer hover:scale-110 duration-300"
-            onClick={startRecording}
-            disabled={isRecording}
-          >
-            Ouvir
-          </Button>
-          <span>
-            Transcrição: <strong>{transcription}</strong>
-          </span>
-          <span>
-            Feedback: <strong>{response}</strong>
-          </span>
+          {isTranscribing ? (
+            <span>Tentando entender essa porcaria</span>
+          ) : isDemotivating ? (
+            <span>Verificando se vale a pena essa imbecialidade</span>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <Button
+                className="p-8 rounded-full bg-transparent border-2 border-primary text-primary text-lg font-semibold uppercase hover:bg-primary/80 hover:text-white hover:cursor-pointer hover:scale-110 duration-300"
+                onClick={startRecording}
+                disabled={isRecording}
+              >
+                {demotivation
+                  ? "Ouvir outra ideia de merda"
+                  : "Ouvir ideia de merda"}
+              </Button>
+              <span>{transcription}</span>
+              <span>{demotivation}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
