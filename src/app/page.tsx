@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { LoaderCircle } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 
 interface TranscriptionResponse {
@@ -19,13 +21,12 @@ interface GeminiResponse {
 export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [isDemotivating, setIsDemotivating] = useState(false);
+  const [isDiscouraging, setIsDiscouraging] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
 
-  const [transcription, setTranscription] = useState<string>("");
-  const [demotivation, setDemotivation] = useState<string>("");
+  const [discourage, setDiscourage] = useState<string>("");
 
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const recordedChunks = useRef<Blob[]>([]);
@@ -50,65 +51,63 @@ export default function Home() {
   async function transcribeAudio(audio: Blob) {
     setIsTranscribing(true);
 
-    const arrayBuffer = await audio.arrayBuffer();
-    const base64Audio = Buffer.from(arrayBuffer).toString("base64");
-
     try {
+      const arrayBuffer = await audio.arrayBuffer();
+      const base64Audio = Buffer.from(arrayBuffer).toString("base64");
+
       const response = await fetch("/api/speech-to-text", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ audioData: base64Audio }),
       });
 
       if (response.ok) {
-        const data: TranscriptionResponse = await response.json();
-        setTranscription(data.transcription || "Nenhuma transcrição recebida.");
-
-        return data.transcription;
+        return (await response.json()) as TranscriptionResponse;
       } else {
-        console.error("Erro ao enviar áudio para transcrição");
-        const errorData: TranscriptionResponse = await response.json();
-        setTranscription(errorData.error || "Erro na transcrição.");
+        toast.error("Transcrição", {
+          description: "Erro ao transcrever áudio",
+        });
       }
-    } catch (err) {
-      console.error("Erro ao comunicar com a API:", err);
-      setTranscription("Erro ao comunicar com o servidor.");
+      // eslint-disable-next-line
+    } catch (err: unknown) {
+      toast.error("Transcrição", {
+        description: "Erro ao comunicar com a API",
+      });
     } finally {
       setIsTranscribing(false);
     }
   }
 
-  async function demotivateTranscription(transcription: string) {
-    setIsDemotivating(true);
+  async function discourageTranscription(transcription: string) {
+    setIsDiscouraging(true);
 
     try {
-      const prompt = `Avalie essa ideia de startup "${transcription}" retornando uma nota de 1 à 4 e uma frase sarcástica no formato 
-      Nota: 
+      const prompt = `
+      Analise a brilhante ideia de startup: "${transcription}". Retorne uma avaliação no seguinte formato, utilizando uma nota de 1 (péssima) a 5 (levemente menos pior) e uma frase sarcástica que capture a essência da sua 'genialidade':
+
+      Ideia:
+      Nota:
       Frase Sarcástica:
       `;
 
-      const res = await fetch("/api/gemini", {
+      const response = await fetch("/api/gemini", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({ prompt }),
       });
 
-      if (res.ok) {
-        const data: GeminiResponse = await res.json();
-        setDemotivation(data.response || "");
+      if (response.ok) {
+        return (await response.json()) as GeminiResponse;
       } else {
-        const errorData: GeminiResponse = await res.json();
-        setDemotivation(errorData.error || "Erro ao obter resposta.");
+        toast.error("Desmotivação", {
+          description: "Erro ao enviar prompt",
+        });
       }
-    } catch (err) {
-      console.error("Erro ao enviar prompt:", err);
-      setDemotivation("Falha ao comunicar com o servidor.");
+      // eslint-disable-next-line
+    } catch (err: unknown) {
+      toast.error("Desmotivação", {
+        description: "Erro ao comunicar com a API",
+      });
     } finally {
-      setIsDemotivating(false);
+      setIsDiscouraging(false);
     }
   }
 
@@ -125,7 +124,18 @@ export default function Home() {
     mediaRecorder.current.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         const transcribedAudio = await transcribeAudio(event.data);
-        demotivateTranscription(transcribedAudio ?? "");
+        if (transcribedAudio && transcribedAudio.transcription) {
+          const discourage = await discourageTranscription(
+            transcribedAudio.transcription
+          );
+          if (discourage && discourage.response) {
+            setDiscourage(discourage.response);
+          } else {
+            toast.info("Não compreendi, fale novamente por favor");
+          }
+        } else {
+          toast.info("Não compreendi, fale novamente por favor");
+        }
       }
     };
 
@@ -177,8 +187,8 @@ export default function Home() {
         <div className="flex flex-col gap-2 items-center text-center">
           {isTranscribing ? (
             <span>Tentando entender essa porcaria</span>
-          ) : isDemotivating ? (
-            <span>Verificando se vale a pena essa imbecialidade</span>
+          ) : isDiscouraging ? (
+            <span>Verificando se vale a pena essa imbecilidade</span>
           ) : (
             <div className="flex flex-col items-center gap-4">
               <Button
@@ -186,12 +196,11 @@ export default function Home() {
                 onClick={startRecording}
                 disabled={isRecording}
               >
-                {demotivation
+                {discourage
                   ? "Ouvir outra ideia de merda"
                   : "Ouvir ideia de merda"}
               </Button>
-              <span>{transcription}</span>
-              <span>{demotivation}</span>
+              {discourage}
             </div>
           )}
         </div>
